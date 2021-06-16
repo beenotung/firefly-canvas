@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Firefly</title>
+  </head>
+  <body>
+    <style>
+      html,
+      body,
+      canvas {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+      canvas#paint {
+        background-color: black;
+      }
+    </style>
+    <canvas id="paint"></canvas>
+    <script>
+      let canvas = document.querySelector('canvas#paint')
+      let W = 0
+      let H = 0
+      function calcSize() {
+        let rect = canvas.getBoundingClientRect()
+        W = rect.width
+        H = rect.height
+        canvas.width = W
+        canvas.height = H
+      }
+      calcSize()
+      window.addEventListener('resize', calcSize)
+      let context = canvas.getContext('2d')
+      let maxPopulation = 500
+      let maxPeer = 3
+      let maxSpeed = 10
+      let fireflySize = 5
+      let lightOnDuration = 500
+      let lightOffDuration = 1500
+      let lightFrequency = lightOnDuration + lightOffDuration
+      let alpha = 0.99
+      let beta = 1 - alpha
+      let fireflyList = []
+      function newFireFly() {
+        let firefly = {
+          position: {
+            x: Math.random() * W,
+            y: Math.random() * H,
+          },
+          speed: {
+            x: (Math.random() * 2 - 1) * maxSpeed,
+            y: (Math.random() * 2 - 1) * maxSpeed,
+          },
+          frequencyOffset: Math.random() * lightFrequency,
+          nextFrequencyOffset: 0,
+          peerList: [],
+        }
+        fireflyList.push(firefly)
+      }
+      function randomElement(array) {
+        return array[Math.floor(Math.random() * array.length)]
+      }
+      function randomPeer(firefly) {
+        if (firefly.peerList.length === 0) {
+          return randomElement(fireflyList)
+        }
+        let peer = randomElement(firefly.peerList)
+        if (peer.peerList.length === 1) {
+          return randomElement(fireflyList)
+        }
+        return randomElement(peer.peerList)
+      }
+      function calcDistanceSquare(a, b) {
+        let x = a.x - b.x
+        let y = a.y - b.y
+        return x * x + y * y
+      }
+      function removeFromArray(array, element) {
+        let idx = array.indexOf(element)
+        array.splice(idx)
+      }
+      newFireFly()
+      let lastTime = Date.now()
+      function draw() {
+        requestAnimationFrame(draw)
+        let now = Date.now()
+        let dt = now - lastTime
+        if (dt <= 1) {
+          return
+        }
+        lastTime = now
+        dt /= 1000
+
+        // grow population
+        newFireFly()
+        if (fireflyList.length > maxPopulation) {
+          fireflyList.shift()
+        }
+
+        // update logic
+        fireflyList.forEach(firefly => {
+          let peer = randomPeer(firefly)
+          if (peer && !firefly.peerList.includes(peer)) {
+            firefly.peerList.push(peer)
+            peer.peerList.push(firefly)
+          }
+          if (firefly.peerList.length > maxPeer) {
+            peer = firefly.peerList
+              .map(peer => ({
+                peer,
+                d: calcDistanceSquare(firefly, peer),
+              }))
+              .sort((a, b) => a.d - b.d)
+              .pop().peer
+            removeFromArray(firefly.peerList, peer)
+            removeFromArray(peer.peerList, firefly)
+          }
+          firefly.position.x += firefly.speed.x * dt
+          firefly.position.y += firefly.speed.y * dt
+
+          let acc = firefly.frequencyOffset
+          firefly.peerList.forEach(peer => {
+            acc = acc * alpha + peer.frequencyOffset * beta
+          })
+          firefly.nextFrequencyOffset = acc
+        })
+        fireflyList.forEach(
+          firefly => (firefly.frequencyOffset = firefly.nextFrequencyOffset),
+        )
+
+        // clear screen
+        context.clearRect(0, 0, W, H)
+
+        // draw line
+        // fireflyList.forEach(firefly => {
+        //   firefly.peerList.forEach(peer => {
+        //     context.beginPath()
+        //     context.moveTo(firefly.position.x, firefly.position.y)
+        //     context.lineTo(peer.position.x, peer.position.y)
+        //     context.strokeStyle = 'lightgreen'
+        //     context.stroke()
+        //   })
+        // })
+
+        // draw light
+        fireflyList.forEach(firefly => {
+          let cycle =
+            (now - firefly.frequencyOffset + lightFrequency) % lightFrequency
+          if (cycle >= lightOnDuration) {
+            return
+          }
+          context.fillStyle = 'cyan'
+          context.fillRect(
+            firefly.position.x - fireflySize / 2,
+            firefly.position.y - fireflySize / 2,
+            fireflySize,
+            fireflySize,
+          )
+        })
+      }
+      requestAnimationFrame(draw)
+    </script>
+  </body>
+</html>
